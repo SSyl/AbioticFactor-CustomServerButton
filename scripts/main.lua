@@ -9,16 +9,33 @@ local function DebugLog(message)
     end
 end
 
+local function TrySetButtonText(button, attempts)
+    attempts = attempts or 0
+    if attempts > 10 then
+        DebugLog("ERROR: ButtonLabelText never initialized after 10 attempts")
+        return
+    end
+
+    local labelText = button.ButtonLabelText
+    if labelText and labelText:IsValid() then
+        labelText:SetText(FText("Direct Connect"))
+        DebugLog("Button text set")
+    else
+        ExecuteWithDelay(50, function()
+            TrySetButtonText(button, attempts + 1)
+        end)
+    end
+end
+
 local function CreateButton()
     DebugLog("CreateButton called")
-
 
     local Canvas = nil
     local allCanvas = FindAllOf("CanvasPanel")
     for _, canvas in pairs(allCanvas) do
         if canvas and canvas:IsValid() then
             local fullName = canvas:GetFullName()
-            if fullName:find("W_MainMenu_Play") and fullName:find("CanvasPanel_42") then
+            if fullName:find("W_MainMenu_Play") and fullName:find("CanvasPanel_42") and fullName:find("/Engine/Transient") then
                 Canvas = canvas
                 DebugLog("Canvas found: " .. fullName)
                 break
@@ -44,15 +61,12 @@ local function CreateButton()
     end
 
     local Slot = Canvas:AddChildToCanvas(CustomServerBtn)
-
     Slot:SetPosition({X = 125, Y = 700.0})
     Slot:SetAnchors({Min = {X = 0.0, Y = 1.0}, Max = {X = 0.0, Y = 1.0}})
-    CustomServerBtn:SetVisibility(4)
-    CustomServerBtn.ButtonLabelText:SetText(FText("Direct Connect"))
 
+    TrySetButtonText(CustomServerBtn)
     DebugLog("Button created successfully")
 end
-
 
 RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature", function(Context)
     local btn = Context:get()
@@ -64,7 +78,7 @@ RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuBut
         local ServerBrowser = Master.W_ServerBrowser
 
         if ServerBrowser and ServerBrowser:IsValid() then
-            local cmd = "open a.b.c.d:7777" --a.b.c.d as it causes the connection to timeout immediately. Good for testing.
+            local cmd = "open a.b.c.d:7777"
             DebugLog("Executing: " .. cmd)
             KismetSystemLibrary:ExecuteConsoleCommand(ServerBrowser, cmd, nil)
         else
@@ -73,11 +87,27 @@ RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuBut
     end
 end)
 
--- Create on startup
 ExecuteWithDelay(1000, function()
     ExecuteInGameThread(function()
         CreateButton()
     end)
+end)
+
+RegisterLoadMapPostHook(function(Engine, WorldContext, URL, PendingGame, Error)
+    local persistentLevel = UEHelpers.GetPersistentLevel()
+    if persistentLevel:IsValid() then
+        local levelFullName = persistentLevel:GetFullName()
+        DebugLog("Map loaded: " .. levelFullName)
+
+        if levelFullName:find("MainMenu") then
+            DebugLog("MainMenu loaded, creating button")
+            ExecuteWithDelay(500, function()
+                ExecuteInGameThread(function()
+                    CreateButton()
+                end)
+            end)
+        end
+    end
 end)
 
 DebugLog("Mod loaded")
