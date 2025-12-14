@@ -33,7 +33,7 @@ local function TrySetButtonText(button, attempts)
 
     local labelText = button.ButtonLabelText
     if labelText and labelText:IsValid() then
-        labelText:SetText(FText(Config.ButtonText or "Direct Connect"))
+        labelText:SetText(FText(Config.ButtonText or "Custom Server Button"))
         DebugLog("Button text set")
     else
         ExecuteWithDelay(100, function()
@@ -82,8 +82,18 @@ local function CreateButton()
         end
     end
 
+    CustomServerBtn.RenderTransform.Scale = {X = 0.8, Y = 0.8}
+
+    local textColor = {
+        R = (Config.TextColorRed or 42) / 255,
+        G = (Config.TextColorGreen or 255) / 255,
+        B = (Config.TextColorBlue or 45) / 255,
+        A = 1.0
+    }
+    CustomServerBtn.DefaultTextColor = textColor
+
     local Slot = Canvas:AddChildToCanvas(CustomServerBtn)
-    Slot:SetPosition({X = 125, Y = 700.0})
+    Slot:SetPosition({X = 155, Y = 680.0})
     Slot:SetAnchors({Min = {X = 0.0, Y = 1.0}, Max = {X = 0.0, Y = 1.0}})
 
     TrySetButtonText(CustomServerBtn)
