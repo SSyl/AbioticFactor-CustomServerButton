@@ -1,12 +1,27 @@
 print("=== [Custom Server Button] MOD LOADING ===\n")
 
 local UEHelpers = require("UEHelpers")
+local Config = require("../config")
 local DEBUG = true
+local hookRegistered = false
 
 local function DebugLog(message)
     if DEBUG then
         print("[Custom Server Button] " .. tostring(message) .. "\n")
     end
+end
+
+local function BuildConnectCommand()
+    local ip = Config.IP or "127.0.0.1"
+    local port = Config.Port or 7777
+    local password = Config.Password or ""
+
+    local cmd = "open " .. ip .. ":" .. tostring(port)
+    if password ~= "" then
+        cmd = cmd .. "?pw=" .. password
+    end
+
+    return cmd
 end
 
 local function TrySetButtonText(button, attempts)
@@ -18,10 +33,10 @@ local function TrySetButtonText(button, attempts)
 
     local labelText = button.ButtonLabelText
     if labelText and labelText:IsValid() then
-        labelText:SetText(FText("Direct Connect"))
+        labelText:SetText(FText(Config.ButtonText or "Direct Connect"))
         DebugLog("Button text set")
     else
-        ExecuteWithDelay(50, function()
+        ExecuteWithDelay(100, function()
             TrySetButtonText(button, attempts + 1)
         end)
     end
@@ -60,6 +75,13 @@ local function CreateButton()
         return
     end
 
+    if Config.Icon and Config.Icon ~= "" then
+        local iconTexture = StaticFindObject("/Game/Textures/GUI/Icons/" .. Config.Icon .. "." .. Config.Icon)
+        if iconTexture then
+            CustomServerBtn.Icon = iconTexture
+        end
+    end
+
     local Slot = Canvas:AddChildToCanvas(CustomServerBtn)
     Slot:SetPosition({X = 125, Y = 700.0})
     Slot:SetAnchors({Min = {X = 0.0, Y = 1.0}, Max = {X = 0.0, Y = 1.0}})
@@ -68,7 +90,7 @@ local function CreateButton()
     DebugLog("Button created successfully")
 end
 
-RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature", function(Context)
+local function OnButtonClick(Context)
     local btn = Context:get()
     if btn and btn:IsValid() and btn:GetFullName():find("Button_CustomServer") then
         DebugLog("Custom button clicked")
@@ -78,20 +100,14 @@ RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuBut
         local ServerBrowser = Master.W_ServerBrowser
 
         if ServerBrowser and ServerBrowser:IsValid() then
-            local cmd = "open a.b.c.d:7777"
+            local cmd = BuildConnectCommand()
             DebugLog("Executing: " .. cmd)
             KismetSystemLibrary:ExecuteConsoleCommand(ServerBrowser, cmd, nil)
         else
             DebugLog("ERROR: ServerBrowser not found")
         end
     end
-end)
-
-ExecuteWithDelay(1000, function()
-    ExecuteInGameThread(function()
-        CreateButton()
-    end)
-end)
+end
 
 RegisterLoadMapPostHook(function(Engine, WorldContext, URL, PendingGame, Error)
     local persistentLevel = UEHelpers.GetPersistentLevel()
@@ -100,6 +116,11 @@ RegisterLoadMapPostHook(function(Engine, WorldContext, URL, PendingGame, Error)
         DebugLog("Map loaded: " .. levelFullName)
 
         if levelFullName:find("MainMenu") then
+            if not hookRegistered then
+                RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature", OnButtonClick)
+                hookRegistered = true
+            end
+
             DebugLog("MainMenu loaded, creating button")
             ExecuteWithDelay(500, function()
                 ExecuteInGameThread(function()
@@ -107,6 +128,19 @@ RegisterLoadMapPostHook(function(Engine, WorldContext, URL, PendingGame, Error)
                 end)
             end)
         end
+    end
+end)
+
+-- Fallback initialization if hook doesn't fire
+ExecuteWithDelay(3000, function()
+    if not hookRegistered then
+        DebugLog("Fallback initialization triggered")
+        RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature", OnButtonClick)
+        hookRegistered = true
+
+        ExecuteInGameThread(function()
+            CreateButton()
+        end)
     end
 end)
 
