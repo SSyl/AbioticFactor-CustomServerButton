@@ -27,9 +27,11 @@ return {
     Icon = "icon_hackingdevice",
 
     -- Color of the button's text and icon
-    -- Text color (0-255 RGB values)
-    -- Default is Red = 42, Green = 255, Blue = 45
-    TextColorRed = 42,
-    TextColorGreen = 255,
-    TextColorBlue = 45
+    -- RGB values are 0-255
+    -- Default: R = 42, G = 255, B = 45
+    TextColor = {
+        R = 42,
+        G = 255,
+        B = 45
+    }
 }

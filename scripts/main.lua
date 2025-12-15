@@ -5,6 +5,26 @@ local Config = require("../config")
 local DEBUG = true
 local hookRegistered = false
 
+local SERVER_IP = Config.IP or "127.0.0.1"
+local SERVER_PORT = Config.Port or 7777
+local SERVER_PASSWORD = Config.Password or ""
+local BUTTON_TEXT = Config.ButtonText or "Custom Server Button"
+local BUTTON_ICON = Config.Icon
+
+local function ConvertColor(colorConfig, defaultR, defaultG, defaultB)
+    if not colorConfig then
+        return {R = defaultR / 255, G = defaultG / 255, B = defaultB / 255, A = 1.0}
+    end
+    return {
+        R = (colorConfig.R or defaultR) / 255,
+        G = (colorConfig.G or defaultG) / 255,
+        B = (colorConfig.B or defaultB) / 255,
+        A = 1.0
+    }
+end
+
+local BUTTON_TEXT_COLOR = ConvertColor(Config.TextColor, 42, 255, 45)
+
 local function DebugLog(message)
     if DEBUG then
         print("[Custom Server Button] " .. tostring(message) .. "\n")
@@ -12,13 +32,9 @@ local function DebugLog(message)
 end
 
 local function BuildConnectCommand()
-    local ip = Config.IP or "127.0.0.1"
-    local port = Config.Port or 7777
-    local password = Config.Password or ""
-
-    local cmd = "open " .. ip .. ":" .. tostring(port)
-    if password ~= "" then
-        cmd = cmd .. "?pw=" .. password
+    local cmd = "open " .. SERVER_IP .. ":" .. tostring(SERVER_PORT)
+    if SERVER_PASSWORD ~= "" then
+        cmd = cmd .. "?pw=" .. SERVER_PASSWORD
     end
 
     return cmd
@@ -33,7 +49,7 @@ local function TrySetButtonText(button, attempts)
 
     local labelText = button.ButtonLabelText
     if labelText and labelText:IsValid() then
-        labelText:SetText(FText(Config.ButtonText or "Custom Server Button"))
+        labelText:SetText(FText(BUTTON_TEXT))
         DebugLog("Button text set")
     else
         ExecuteWithDelay(100, function()
@@ -75,22 +91,15 @@ local function CreateButton()
         return
     end
 
-    if Config.Icon and Config.Icon ~= "" then
-        local iconTexture = StaticFindObject("/Game/Textures/GUI/Icons/" .. Config.Icon .. "." .. Config.Icon)
+    if BUTTON_ICON and BUTTON_ICON ~= "" then
+        local iconTexture = StaticFindObject("/Game/Textures/GUI/Icons/" .. BUTTON_ICON .. "." .. BUTTON_ICON)
         if iconTexture then
             CustomServerBtn.Icon = iconTexture
         end
     end
 
     CustomServerBtn.RenderTransform.Scale = {X = 0.8, Y = 0.8}
-
-    local textColor = {
-        R = (Config.TextColorRed or 42) / 255,
-        G = (Config.TextColorGreen or 255) / 255,
-        B = (Config.TextColorBlue or 45) / 255,
-        A = 1.0
-    }
-    CustomServerBtn.DefaultTextColor = textColor
+    CustomServerBtn.DefaultTextColor = BUTTON_TEXT_COLOR
 
     local Slot = Canvas:AddChildToCanvas(CustomServerBtn)
     Slot:SetPosition({X = 155, Y = 680.0})
