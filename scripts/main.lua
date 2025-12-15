@@ -2,7 +2,7 @@ print("=== [Custom Server Button] MOD LOADING ===\n")
 
 local UEHelpers = require("UEHelpers")
 local Config = require("../config")
-local DEBUG = true
+local DEBUG = Config.Debug or false
 local hookRegistered = false
 
 local SERVER_IP = Config.IP or "127.0.0.1"
