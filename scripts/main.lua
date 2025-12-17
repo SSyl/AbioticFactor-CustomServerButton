@@ -25,10 +25,21 @@ end
 
 local BUTTON_TEXT_COLOR = ConvertColor(Config.TextColor, 42, 255, 45)
 
-local function DebugLog(message)
-    if DEBUG then
-        print("[Custom Server Button] " .. tostring(message) .. "\n")
+local function Log(message, level)
+    level = level or "info"
+
+    if level == "debug" and not DEBUG then
+        return
     end
+
+    local prefix = ""
+    if level == "error" then
+        prefix = "ERROR: "
+    elseif level == "warning" then
+        prefix = "WARNING: "
+    end
+
+    print("[Custom Server Button] " .. prefix .. tostring(message) .. "\n")
 end
 
 local function BuildConnectCommand()
@@ -43,14 +54,14 @@ end
 local function TrySetButtonText(button, attempts)
     attempts = attempts or 0
     if attempts > 10 then
-        DebugLog("ERROR: ButtonLabelText never initialized after 10 attempts")
+        Log("ButtonLabelText never initialized after 10 attempts", "error")
         return
     end
 
     local labelText = button.ButtonLabelText
     if labelText and labelText:IsValid() then
         labelText:SetText(FText(BUTTON_TEXT))
-        DebugLog("Button text set")
+        Log("Button text set", "debug")
     else
         ExecuteWithDelay(100, function()
             TrySetButtonText(button, attempts + 1)
@@ -59,7 +70,7 @@ local function TrySetButtonText(button, attempts)
 end
 
 local function CreateButton()
-    DebugLog("CreateButton called")
+    Log("CreateButton called", "debug")
 
     local Canvas = nil
     local allCanvas = FindAllOf("CanvasPanel")
@@ -68,26 +79,26 @@ local function CreateButton()
             local fullName = canvas:GetFullName()
             if fullName:find("W_MainMenu_Play") and fullName:find("CanvasPanel_42") and fullName:find("/Engine/Transient") then
                 Canvas = canvas
-                DebugLog("Canvas found: " .. fullName)
+                Log("Canvas found: " .. fullName, "debug")
                 break
             end
         end
     end
 
     if not Canvas then
-        DebugLog("Canvas not found")
+        Log("Canvas not found", "debug")
         return
     end
 
     local ButtonClass = StaticFindObject("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C")
     if not ButtonClass then
-        DebugLog("ERROR: Button class not found")
+        Log("Button class not found", "error")
         return
     end
 
     local CustomServerBtn = StaticConstructObject(ButtonClass, Canvas, FName("Button_CustomServer"))
     if not CustomServerBtn or not CustomServerBtn:IsValid() then
-        DebugLog("ERROR: Failed to create button")
+        Log("Failed to create button", "error")
         return
     end
 
@@ -106,13 +117,13 @@ local function CreateButton()
     Slot:SetAnchors({Min = {X = 0.0, Y = 1.0}, Max = {X = 0.0, Y = 1.0}})
 
     TrySetButtonText(CustomServerBtn)
-    DebugLog("Button created successfully")
+    Log("Button created successfully", "debug")
 end
 
 local function OnButtonClick(Context)
     local btn = Context:get()
     if btn and btn:IsValid() and btn:GetFullName():find("Button_CustomServer") then
-        DebugLog("Custom button clicked")
+        Log("Custom button clicked", "debug")
 
         local KismetSystemLibrary = UEHelpers.GetKismetSystemLibrary()
         local Master = FindFirstOf("W_MainMenu_Master_C")
@@ -120,10 +131,10 @@ local function OnButtonClick(Context)
 
         if ServerBrowser and ServerBrowser:IsValid() then
             local cmd = BuildConnectCommand()
-            DebugLog("Executing: " .. cmd)
+            Log("Executing: " .. cmd, "debug")
             KismetSystemLibrary:ExecuteConsoleCommand(ServerBrowser, cmd, nil)
         else
-            DebugLog("ERROR: ServerBrowser not found")
+            Log("ServerBrowser not found", "error")
         end
     end
 end
@@ -132,7 +143,7 @@ RegisterLoadMapPostHook(function(Engine, WorldContext, URL, PendingGame, Error)
     local persistentLevel = UEHelpers.GetPersistentLevel()
     if persistentLevel:IsValid() then
         local levelFullName = persistentLevel:GetFullName()
-        DebugLog("Map loaded: " .. levelFullName)
+        Log("Map loaded: " .. levelFullName, "debug")
 
         if levelFullName:find("MainMenu") then
             if not hookRegistered then
@@ -140,7 +151,7 @@ RegisterLoadMapPostHook(function(Engine, WorldContext, URL, PendingGame, Error)
                 hookRegistered = true
             end
 
-            DebugLog("MainMenu loaded, creating button")
+            Log("MainMenu loaded, creating button", "debug")
             ExecuteWithDelay(500, function()
                 ExecuteInGameThread(function()
                     CreateButton()
@@ -153,7 +164,7 @@ end)
 -- Fallback initialization if hook doesn't fire
 ExecuteWithDelay(3000, function()
     if not hookRegistered then
-        DebugLog("Fallback initialization triggered")
+        Log("Fallback initialization triggered", "debug")
         RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature", OnButtonClick)
         hookRegistered = true
 
@@ -163,4 +174,4 @@ ExecuteWithDelay(3000, function()
     end
 end)
 
-DebugLog("Mod loaded")
+Log("Mod loaded", "debug")
