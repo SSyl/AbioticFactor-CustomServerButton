@@ -59,7 +59,7 @@ local function TrySetButtonText(button, attempts)
     end
 
     local labelText = button.ButtonLabelText
-    if labelText and labelText:IsValid() then
+    if labelText:IsValid() then
         labelText:SetText(FText(BUTTON_TEXT))
         Log("Button text set", "debug")
     else
@@ -75,7 +75,7 @@ local function CreateButton()
     local Canvas = nil
     local allCanvas = FindAllOf("CanvasPanel")
     for _, canvas in pairs(allCanvas) do
-        if canvas and canvas:IsValid() then
+        if canvas:IsValid() then
             local fullName = canvas:GetFullName()
             if fullName:find("W_MainMenu_Play") and fullName:find("CanvasPanel_42") and fullName:find("/Engine/Transient") then
                 Canvas = canvas
@@ -122,14 +122,14 @@ end
 
 local function OnButtonClick(Context)
     local btn = Context:get()
-    if btn and btn:IsValid() and btn:GetFullName():find("Button_CustomServer") then
+    if btn:IsValid() and btn:GetFullName():find("Button_CustomServer") then
         Log("Custom button clicked", "debug")
 
         local KismetSystemLibrary = UEHelpers.GetKismetSystemLibrary()
         local Master = FindFirstOf("W_MainMenu_Master_C")
         local ServerBrowser = Master.W_ServerBrowser
 
-        if ServerBrowser and ServerBrowser:IsValid() then
+        if ServerBrowser:IsValid() then
             local cmd = BuildConnectCommand()
             Log("Executing: " .. cmd, "debug")
             KismetSystemLibrary:ExecuteConsoleCommand(ServerBrowser, cmd, nil)
