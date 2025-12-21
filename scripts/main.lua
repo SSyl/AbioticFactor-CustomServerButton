@@ -91,7 +91,7 @@ local function CreateButton()
     end
 
     local ButtonClass = StaticFindObject("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C")
-    if not ButtonClass then
+    if not ButtonClass:IsValid() then
         Log("Button class not found", "error")
         return
     end
@@ -104,7 +104,7 @@ local function CreateButton()
 
     if BUTTON_ICON and BUTTON_ICON ~= "" then
         local iconTexture = StaticFindObject("/Game/Textures/GUI/Icons/" .. BUTTON_ICON .. "." .. BUTTON_ICON)
-        if iconTexture then
+        if iconTexture:IsValid() then
             CustomServerBtn.Icon = iconTexture
         end
     end
