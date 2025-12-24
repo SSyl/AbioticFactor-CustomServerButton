@@ -3,27 +3,13 @@ print("=== [Custom Server Button] MOD LOADING ===\n")
 local UEHelpers = require("UEHelpers")
 local Config = require("../config")
 local DEBUG = Config.Debug or false
-local hookRegistered = false
+local buttonCreated = false
 
 local SERVER_IP = Config.IP or "127.0.0.1"
 local SERVER_PORT = Config.Port or 7777
 local SERVER_PASSWORD = Config.Password or ""
 local BUTTON_TEXT = Config.ButtonText or "Custom Server Button"
 local BUTTON_ICON = Config.Icon
-
-local function ConvertColor(colorConfig, defaultR, defaultG, defaultB)
-    if not colorConfig then
-        return {R = defaultR / 255, G = defaultG / 255, B = defaultB / 255, A = 1.0}
-    end
-    return {
-        R = (colorConfig.R or defaultR) / 255,
-        G = (colorConfig.G or defaultG) / 255,
-        B = (colorConfig.B or defaultB) / 255,
-        A = 1.0
-    }
-end
-
-local BUTTON_TEXT_COLOR = ConvertColor(Config.TextColor, 42, 255, 45)
 
 local function Log(message, level)
     level = level or "info"
@@ -42,50 +28,38 @@ local function Log(message, level)
     print("[Custom Server Button] " .. prefix .. tostring(message) .. "\n")
 end
 
-local function BuildConnectCommand()
-    local cmd = "open " .. SERVER_IP .. ":" .. tostring(SERVER_PORT)
-    if SERVER_PASSWORD ~= "" then
-        cmd = cmd .. "?pw=" .. SERVER_PASSWORD
+
+local function validateConfig()
+    if SERVER_IP and type(SERVER_IP) ~= "string" then
+        Log("Invalid server address in config, using 127.0.0.1", "error")
+        SERVER_IP = "127.0.0.1"
     end
 
-    return cmd
-end
-
-local function TrySetButtonText(button, attempts)
-    attempts = attempts or 0
-    if attempts > 10 then
-        Log("ButtonLabelText never initialized after 10 attempts", "error")
-        return
-    end
-
-    local labelText = button.ButtonLabelText
-    if labelText:IsValid() then
-        labelText:SetText(FText(BUTTON_TEXT))
-        Log("Button text set", "debug")
-    else
-        ExecuteWithDelay(100, function()
-            TrySetButtonText(button, attempts + 1)
-        end)
+    if SERVER_PORT and (type(SERVER_PORT) ~= "number" or SERVER_PORT <= 0) then
+        Log("Invalid port in config, using 7777", "error")
+        SERVER_PORT = 7777
     end
 end
+
+validateConfig()
+
+local function ConvertColor(colorConfig, defaultR, defaultG, defaultB)
+    if not colorConfig or type(colorConfig) ~= "table" then
+        return { R = defaultR / 255, G = defaultG / 255, B = defaultB / 255, A = 1.0 }
+    end
+    return {
+        R = (tonumber(colorConfig.R) or defaultR) / 255,
+        G = (tonumber(colorConfig.G) or defaultG) / 255,
+        B = (tonumber(colorConfig.B) or defaultB) / 255,
+        A = 1.0
+    }
+end
+
+local BUTTON_TEXT_COLOR = ConvertColor(Config.TextColor, 42, 255, 45)
 
 local function CreateButton()
-    Log("CreateButton called", "debug")
-
-    local Canvas = nil
-    local allCanvas = FindAllOf("CanvasPanel")
-    for _, canvas in pairs(allCanvas) do
-        if canvas:IsValid() then
-            local fullName = canvas:GetFullName()
-            if fullName:find("W_MainMenu_Play") and fullName:find("CanvasPanel_42") and fullName:find("/Engine/Transient") then
-                Canvas = canvas
-                Log("Canvas found: " .. fullName, "debug")
-                break
-            end
-        end
-    end
-
-    if not Canvas then
+    local Canvas = FindObject("CanvasPanel", "CanvasPanel_42")
+    if not Canvas:IsValid() then
         Log("Canvas not found", "debug")
         return
     end
@@ -109,15 +83,19 @@ local function CreateButton()
         end
     end
 
-    CustomServerBtn.RenderTransform.Scale = {X = 0.8, Y = 0.8}
+    CustomServerBtn.RenderTransform.Scale = { X = 0.8, Y = 0.8 }
     CustomServerBtn.DefaultTextColor = BUTTON_TEXT_COLOR
 
     local Slot = Canvas:AddChildToCanvas(CustomServerBtn)
-    Slot:SetPosition({X = 155, Y = 680.0})
-    Slot:SetAnchors({Min = {X = 0.0, Y = 1.0}, Max = {X = 0.0, Y = 1.0}})
+    Slot:SetPosition({ X = 155, Y = 680.0 })
+    Slot:SetAnchors({ Min = { X = 0.0, Y = 1.0 }, Max = { X = 0.0, Y = 1.0 } })
 
-    TrySetButtonText(CustomServerBtn)
-    Log("Button created successfully", "debug")
+    local ok, labelText = pcall(function() return CustomServerBtn.ButtonLabelText end)
+    if ok and labelText:IsValid() then
+        pcall(function() labelText:SetText(FText(BUTTON_TEXT)) end)
+    end
+
+    buttonCreated = true
 end
 
 local function OnButtonClick(Context)
@@ -125,12 +103,27 @@ local function OnButtonClick(Context)
     if btn:IsValid() and btn:GetFullName():find("Button_CustomServer") then
         Log("Custom button clicked", "debug")
 
-        local KismetSystemLibrary = UEHelpers.GetKismetSystemLibrary()
         local Master = FindFirstOf("W_MainMenu_Master_C")
-        local ServerBrowser = Master.W_ServerBrowser
+        if not Master:IsValid() then
+            Log("Master menu not found", "error")
+            return
+        end
 
-        if ServerBrowser:IsValid() then
-            local cmd = BuildConnectCommand()
+        local ok, ServerBrowser = pcall(function()
+            return Master.W_ServerBrowser
+        end)
+
+        if ok and ServerBrowser:IsValid() then
+            local KismetSystemLibrary = UEHelpers.GetKismetSystemLibrary()
+            if not KismetSystemLibrary:IsValid() then
+                Log("KismetSystemLibrary not found", "error")
+                return
+            end
+
+            local cmd = "open " .. SERVER_IP .. ":" .. tostring(SERVER_PORT)
+            if SERVER_PASSWORD ~= "" then
+                cmd = cmd .. "?pw=" .. SERVER_PASSWORD
+            end
             Log("Executing: " .. cmd, "debug")
             KismetSystemLibrary:ExecuteConsoleCommand(ServerBrowser, cmd, nil)
         else
@@ -139,39 +132,27 @@ local function OnButtonClick(Context)
     end
 end
 
-RegisterLoadMapPostHook(function(Engine, WorldContext, URL, PendingGame, Error)
-    local persistentLevel = UEHelpers.GetPersistentLevel()
-    if persistentLevel:IsValid() then
-        local levelFullName = persistentLevel:GetFullName()
-        Log("Map loaded: " .. levelFullName, "debug")
+-- Hook menu button clicks - when ANY button is clicked, menu exists, create our custom button
+local success, errorMsg = pcall(RegisterHook,
+    "/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature",
+    function(Context)
+        local btn = Context:get()
+        if not btn:IsValid() then return end
 
-        if levelFullName:find("MainMenu") then
-            if not hookRegistered then
-                RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature", OnButtonClick)
-                hookRegistered = true
-            end
-
-            Log("MainMenu loaded, creating button", "debug")
-            ExecuteWithDelay(500, function()
-                ExecuteInGameThread(function()
-                    CreateButton()
-                end)
-            end)
-        end
-    end
-end)
-
--- Fallback initialization if hook doesn't fire
-ExecuteWithDelay(3000, function()
-    if not hookRegistered then
-        Log("Fallback initialization triggered", "debug")
-        RegisterHook("/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature", OnButtonClick)
-        hookRegistered = true
-
-        ExecuteInGameThread(function()
+        if not buttonCreated then
+            Log("Menu button clicked - creating custom button", "debug")
             CreateButton()
-        end)
-    end
-end)
+        end
+
+        local fullName = btn:GetFullName()
+        if fullName:find("Button_CustomServer") then
+            OnButtonClick(Context)
+        end
+    end)
+
+if not success then
+    Log("Hook registration failed (menu not ready yet): " .. tostring(errorMsg), "debug")
+    -- Don't return - hook will work when menu loads
+end
 
 Log("Mod loaded", "debug")
