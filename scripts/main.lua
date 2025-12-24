@@ -3,7 +3,6 @@ print("=== [Custom Server Button] MOD LOADING ===\n")
 local UEHelpers = require("UEHelpers")
 local Config = require("../config")
 local DEBUG = Config.Debug or false
-local buttonCreated = false
 
 local SERVER_IP = Config.IP or "127.0.0.1"
 local SERVER_PORT = Config.Port or 7777
@@ -57,10 +56,14 @@ end
 
 local BUTTON_TEXT_COLOR = ConvertColor(Config.TextColor, 42, 255, 45)
 
+
 local function CreateButton()
-    local Canvas = FindObject("CanvasPanel", "CanvasPanel_42")
+    -- Find live runtime canvas instance
+    -- RF_NoFlags = no required flags, RF_WasLoaded = exclude blueprint templates loaded from disk
+    -- Runtime instances don't have RF_WasLoaded, while blueprint templates do
+    local Canvas = FindObject("CanvasPanel", "CanvasPanel_42", EObjectFlags.RF_NoFlags, EObjectFlags.RF_WasLoaded)
     if not Canvas:IsValid() then
-        Log("Canvas not found", "debug")
+        Log("Canvas not found", "error")
         return
     end
 
@@ -93,16 +96,14 @@ local function CreateButton()
     local ok, labelText = pcall(function() return CustomServerBtn.ButtonLabelText end)
     if ok and labelText:IsValid() then
         pcall(function() labelText:SetText(FText(BUTTON_TEXT)) end)
+    else
+        Log("ButtonLabelText not available", "warning")
     end
-
-    buttonCreated = true
 end
 
 local function OnButtonClick(Context)
     local btn = Context:get()
     if btn:IsValid() and btn:GetFullName():find("Button_CustomServer") then
-        Log("Custom button clicked", "debug")
-
         local Master = FindFirstOf("W_MainMenu_Master_C")
         if not Master:IsValid() then
             Log("Master menu not found", "error")
@@ -124,7 +125,6 @@ local function OnButtonClick(Context)
             if SERVER_PASSWORD ~= "" then
                 cmd = cmd .. "?pw=" .. SERVER_PASSWORD
             end
-            Log("Executing: " .. cmd, "debug")
             KismetSystemLibrary:ExecuteConsoleCommand(ServerBrowser, cmd, nil)
         else
             Log("ServerBrowser not found", "error")
@@ -132,27 +132,48 @@ local function OnButtonClick(Context)
     end
 end
 
--- Hook menu button clicks - when ANY button is clicked, menu exists, create our custom button
-local success, errorMsg = pcall(RegisterHook,
-    "/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature",
-    function(Context)
-        local btn = Context:get()
-        if not btn:IsValid() then return end
+-- Hook mainmenu button clicks - when clicked it means a menu exists, so create our custom button (if not already present)
+local hookRegistered = false
 
-        if not buttonCreated then
-            Log("Menu button clicked - creating custom button", "debug")
-            CreateButton()
+local function TryRegisterHook()
+    if hookRegistered then return true end
+
+    local success, errorMsg = pcall(RegisterHook,
+        "/Game/Blueprints/Widgets/MenuSystem/W_MainMenuButton.W_MainMenuButton_C:BndEvt__AbioticButton_K2Node_ComponentBoundEvent_0_OnButtonClickedEvent__DelegateSignature",
+        function(Context)
+            local btn = Context:get()
+            if not btn:IsValid() then return end
+
+            local existingButton = FindObject("W_MainMenuButton_C", "Button_CustomServer")
+            if not existingButton:IsValid() then
+                CreateButton()
+            end
+
+            local fullName = btn:GetFullName()
+            if fullName:find("Button_CustomServer") then
+                OnButtonClick(Context)
+            end
+        end)
+
+    if success then
+        hookRegistered = true
+        return true
+    else
+        Log("Hook registration failed: " .. tostring(errorMsg), "debug")
+        return false
+    end
+end
+
+if not TryRegisterHook() then
+    local retryCount = 0
+    local function retry()
+        if TryRegisterHook() or retryCount >= 10 then
+            return
         end
-
-        local fullName = btn:GetFullName()
-        if fullName:find("Button_CustomServer") then
-            OnButtonClick(Context)
-        end
-    end)
-
-if not success then
-    Log("Hook registration failed (menu not ready yet): " .. tostring(errorMsg), "debug")
-    -- Don't return - hook will work when menu loads
+        retryCount = retryCount + 1
+        ExecuteWithDelay(2000, retry)
+    end
+    retry()
 end
 
 Log("Mod loaded", "debug")
